@@ -15,7 +15,7 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+        buildDiscarder(logrotator(numToKeepStr: '10'))
     }
 
     stages {
@@ -29,28 +29,33 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                echo '📦 Fetching source code...'
+                echo '📦 Cloning repository...'
                 checkout scm
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                echo '📥 Installing npm dependencies...'
-                sh '''
-                    if [ -f package-lock.json ]; then
-                        npm ci
-                    else
-                        npm install
-                    fi
-                ''' 
-                || bat '''
-                    if exist package-lock.json (
-                        npm ci
-                    ) else (
-                        npm install
-                    )
-                '''
+                echo '📥 Installing dependencies...'
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            if [ -f package-lock.json ]; then
+                                npm ci
+                            else
+                                npm install
+                            fi
+                        '''
+                    } else {
+                        bat '''
+                            if exist package-lock.json (
+                                npm ci
+                            ) else (
+                                npm install
+                            )
+                        '''
+                    }
+                }
             }
         }
 
@@ -59,9 +64,9 @@ pipeline {
                 echo '🧪 Running tests...'
                 script {
                     if (isUnix()) {
-                        sh 'npm test -- --watchAll=false || echo "Tests failed or skipped"'
+                        sh 'npm test -- --watchAll=false || echo "Tests skipped/failed"'
                     } else {
-                        bat 'npm test -- --watchAll=false || echo Tests failed or skipped'
+                        bat 'npm test -- --watchAll=false'
                     }
                 }
             }
@@ -86,7 +91,10 @@ pipeline {
                 script {
                     if (isUnix()) {
                         sh '''
-                            test -f build/index.html || (echo "❌ Build failed: index.html missing" && exit 1)
+                            if [ ! -f build/index.html ]; then
+                                echo "❌ Build failed: index.html missing"
+                                exit 1
+                            fi
                         '''
                     } else {
                         bat '''
@@ -100,27 +108,35 @@ pipeline {
             }
         }
 
-        stage('Archive Artifacts') {
+        stage('Archive Build') {
             steps {
-                echo '📚 Archiving build...'
+                echo '📚 Archiving artifacts...'
                 archiveArtifacts artifacts: 'build/**', fingerprint: true
             }
         }
 
         stage('Deploy to Nginx') {
             steps {
-                echo '🚀 Deploying to Nginx...'
+                echo '🚀 Deploying application...'
                 script {
+
                     if (isUnix()) {
+
                         sh """
+                            echo "Deploying to Linux Nginx..."
+
                             sudo rm -rf ${LINUX_NGINX_PATH}/*
                             sudo cp -r build/* ${LINUX_NGINX_PATH}/
+
+                            echo "Files deployed:"
                             ls -la ${LINUX_NGINX_PATH}
                         """
+
                     } else {
+
                         bat """
                             echo =====================================
-                            echo Deploying React App to Nginx
+                            echo React Deployment Starting (Windows)
                             echo =====================================
 
                             set SOURCE=%WORKSPACE%\\build
@@ -130,24 +146,26 @@ pipeline {
                             echo Target: %TARGET%
 
                             if not exist "%SOURCE%\\index.html" (
-                                echo ❌ Build folder invalid!
+                                echo ❌ ERROR: Build not found!
                                 exit /b 1
                             )
 
-                            if not exist "%TARGET%" mkdir "%TARGET%"
+                            if not exist "%TARGET%" (
+                                mkdir "%TARGET%"
+                            )
 
                             echo Cleaning old files...
                             del /Q /F "%TARGET%\\*" 2>nul
                             for /d %%p in ("%TARGET%\\*") do rmdir /Q /S "%%p" 2>nul
 
-                            echo Copying files...
+                            echo Copying new build...
                             xcopy /E /Y /I "%SOURCE%\\*" "%TARGET%\\"
 
                             echo Verifying deployment...
                             if exist "%TARGET%\\index.html" (
-                                echo ✅ Deployment successful
+                                echo ✅ Deployment successful!
                             ) else (
-                                echo ❌ Deployment failed
+                                echo ❌ Deployment failed!
                                 exit /b 1
                             )
 
@@ -161,7 +179,7 @@ pipeline {
 
     post {
         success {
-            echo '🎉 SUCCESS: React app deployed successfully!'
+            echo '🎉 SUCCESS: Application deployed successfully!'
         }
 
         failure {
