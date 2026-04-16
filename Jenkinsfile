@@ -8,7 +8,7 @@ pipeline {
     environment {
         CI = 'true'
         APP_NAME = 'jenkins-react-project'
-        NGINX_PATH = 'C:\\nginx\\html\\jenkins-react-project'
+        NGINX_PATH = 'C:\\nginx-1.29.8\\html\\jenkins-react-project'
     }
 
     options {
@@ -90,7 +90,7 @@ pipeline {
                     echo =====================================
 
                     set SOURCE=%WORKSPACE%\\build
-                    set TARGET=C:\\nginx\\html\\jenkins-react-project
+                    set TARGET=C:\\nginx-1.29.8\\html\\jenkins-react-project
 
                     echo Source: %SOURCE%
                     echo Target: %TARGET%
