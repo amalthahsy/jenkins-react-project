@@ -74,7 +74,7 @@ pipeline {
                 // Copy build files to Nginx html directory
                 bat '''
                     echo "Stopping existing deployment..."
-                    xcopy /E /Y /I build\* C:\nginx\html\jenkins-react-project\
+                    xcopy /E /Y /I build\\* C:\\nginx\\html\\jenkins-react-demo\\
                     echo "Deployment complete!"
                 '''
             }
