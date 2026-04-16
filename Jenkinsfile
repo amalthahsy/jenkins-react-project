@@ -44,7 +44,21 @@ pipeline {
                 }
             }
         }
-        
+        stage('Debug - Check Files') {
+           steps {
+            script {
+            echo '📁 Listing all files in src directory:'
+            if (isUnix()) {
+                sh 'ls -la src/'
+                sh 'find src -name "*.test.js" -o -name "*.spec.js"'
+            } else {
+                bat 'dir src'
+                bat 'dir /s /b src\\*.test.js'
+                bat 'dir /s /b src\\*.spec.js'
+                 }
+              }
+            }
+          }
         stage('Test') {
             steps {
                 echo '🧪 Running tests...'
