@@ -150,10 +150,10 @@ pipeline {
                     echo 📍 Your app: http://localhost:8081
                     echo ========================================
                 '''
-            }
-        }
-    }
-}
+                 }
+              }
+          }
+      }
     
     post {
         success {
