@@ -154,6 +154,7 @@ pipeline {
               }
           }
       }
+    }
     
     post {
         success {
@@ -166,5 +167,4 @@ pipeline {
             echo '🎯 Pipeline execution completed.'
         }
     }
-}
-}
+ }
