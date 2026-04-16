@@ -2,12 +2,11 @@ pipeline {
     agent any
     
     tools {
-        nodejs 'NodeJS-24'  // Must match name in Global Tool Configuration
+        nodejs 'NodeJS-24'
     }
     
     environment {
         CI = 'true'
-        NODE_ENV = 'development'
     }
     
     stages {
@@ -20,36 +19,41 @@ pipeline {
         
         stage('Setup') {
             steps {
-                echo '🔧 Setting up Node.js environment...'
-                sh 'node --version'
-                sh 'npm --version'
+                script {
+                    echo '🔧 Setting up Node.js environment...'
+                    if (isUnix()) {
+                        sh 'node --version'
+                        sh 'npm --version'
+                    } else {
+                        bat 'node --version'
+                        bat 'npm --version'
+                    }
+                }
             }
         }
         
         stage('Install Dependencies') {
             steps {
                 echo '📥 Installing npm dependencies...'
-                sh 'npm install'
+                script {
+                    if (isUnix()) {
+                        sh 'npm install'
+                    } else {
+                        bat 'npm install'
+                    }
+                }
             }
         }
         
         stage('Test') {
             steps {
                 echo '🧪 Running tests...'
-                sh 'npm test -- --watchAll=false --coverage'
-            }
-            post {
-                always {
-                    // Archive test results even if tests fail
-                    junit 'test-results.xml'
-                    publishHTML([
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'coverage',
-                        reportFiles: 'index.html',
-                        reportName: 'Test Coverage Report'
-                    ])
+                script {
+                    if (isUnix()) {
+                        sh 'npm test -- --watchAll=false'
+                    } else {
+                        bat 'npm test -- --watchAll=false'
+                    }
                 }
             }
         }
@@ -57,7 +61,13 @@ pipeline {
         stage('Build') {
             steps {
                 echo '🏗️ Building React application...'
-                sh 'npm run build'
+                script {
+                    if (isUnix()) {
+                        sh 'npm run build'
+                    } else {
+                        bat 'npm run build'
+                    }
+                }
             }
         }
         
@@ -68,31 +78,37 @@ pipeline {
             }
         }
         
-        stage('Deploy to Local Nginx') {
+        stage('Deploy') {
             steps {
-                echo '🚀 Deploying to local Nginx server...'
-                // Copy build files to Nginx html directory
-                bat '''
-                    echo "Stopping existing deployment..."
-                    xcopy /E /Y /I build\\* C:\\nginx\\html\\jenkins-react-project\\
-                    echo "Deployment complete!"
-                '''
+                echo '🚀 Deploying application...'
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            mkdir -p /var/www/html/jenkins-react-demo
+                            cp -r build/* /var/www/html/jenkins-react-demo/
+                        '''
+                    } else {
+                        bat '''
+                            @echo off
+                            if not exist "C:\\nginx\\html\\jenkins-react-project" mkdir "C:\\nginx\\html\\jenkins-react-project"
+                            xcopy /E /Y /I build\\* C:\\nginx\\html\\jenkins-react-project\\
+                        '''
+                    }
+                }
             }
         }
     }
     
     post {
         success {
-            echo '✅ Pipeline succeeded! Application is deployed.'
-            // You can add Slack/Email notifications here
+            echo '✅ Pipeline succeeded!'
         }
         failure {
-            echo '❌ Pipeline failed! Check the logs for errors.'
-            // Add failure notifications here
+            echo '❌ Pipeline failed!'
         }
         always {
             echo '🎯 Pipeline execution completed.'
-            cleanWs() // Clean workspace
+            cleanWs()
         }
     }
 }
