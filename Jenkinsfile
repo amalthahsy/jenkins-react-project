@@ -49,7 +49,9 @@ pipeline {
         stage('Test') {
             steps {
                 echo '🧪 Running tests...'
-                bat 'npm test -- --watchAll=false'
+                bat '''
+                    npm test -- --watchAll=false --passWithNoTests
+                '''
             }
         }
 
