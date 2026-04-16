@@ -1,46 +1,46 @@
 pipeline {
     agent any
-    
+
     tools {
-        nodejs 'NodeJS-24'  // Must match name in Global Tool Configuration
+        nodejs 'NodeJS-24'  // Must match Jenkins Global Tool config
     }
-    
+
     environment {
         CI = 'true'
         NODE_ENV = 'development'
     }
-    
+
     stages {
+
         stage('Checkout') {
             steps {
                 echo '📦 Checking out code from GitHub...'
                 checkout scm
             }
         }
-        
+
         stage('Setup') {
             steps {
                 echo '🔧 Setting up Node.js environment...'
-                sh 'node --version'
-                sh 'npm --version'
+                bat 'node --version'
+                bat 'npm --version'
             }
         }
-        
+
         stage('Install Dependencies') {
             steps {
                 echo '📥 Installing npm dependencies...'
-                sh 'npm install'
+                bat 'npm install'
             }
         }
-        
+
         stage('Test') {
             steps {
                 echo '🧪 Running tests...'
-                sh 'npm test -- --watchAll=false --coverage'
+                bat 'npm test -- --watchAll=false --coverage'
             }
             post {
                 always {
-                    // Archive test results even if tests fail
                     junit 'test-results.xml'
                     publishHTML([
                         allowMissing: true,
@@ -53,46 +53,52 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Build') {
             steps {
                 echo '🏗️ Building React application...'
-                sh 'npm run build'
+                bat 'npm run build'
             }
         }
-        
+
         stage('Archive Build') {
             steps {
                 echo '📚 Archiving build artifacts...'
                 archiveArtifacts artifacts: 'build/**', fingerprint: true
             }
         }
-        
+
         stage('Deploy to Local Nginx') {
             steps {
                 echo '🚀 Deploying to local Nginx server...'
-                // Copy build files to Nginx html directory
                 bat '''
-                    echo "Stopping existing deployment..."
-                    xcopy /E /Y /I build\\* C:\\nginx\\html\\jenkins-react-demo\\
-                    echo "Deployment complete!"
+                    echo Cleaning old deployment...
+                    rmdir /S /Q C:\\nginx\\html\\jenkins-react-demo
+
+                    echo Creating folder...
+                    mkdir C:\\nginx\\html\\jenkins-react-demo
+
+                    echo Copying build files...
+                    xcopy /E /I /Y "%WORKSPACE%\\build\\*" C:\\nginx\\html\\jenkins-react-project\\
+
+                    echo Deployment complete!
                 '''
             }
         }
     }
-    
+
     post {
         success {
             echo '✅ Pipeline succeeded! Application is deployed.'
-            // You can add Slack/Email notifications here
         }
+
         failure {
-            echo '❌ Pipeline failed! Check the logs for errors.'
-            // Add failure notifications here
+            echo '❌ Pipeline failed! Check logs.'
         }
+
         always {
             echo '🎯 Pipeline execution completed.'
-            cleanWs() // Clean workspace
+            cleanWs()
         }
     }
 }
