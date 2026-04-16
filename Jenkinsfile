@@ -44,25 +44,12 @@ pipeline {
                 }
             }
         }
-        stage('Debug - Check Files') {
-           steps {
-            script {
-            echo '📁 Listing all files in src directory:'
-            if (isUnix()) {
-                sh 'ls -la src/'
-                sh 'find src -name "*.test.js" -o -name "*.spec.js"'
-            } else {
-                bat 'dir src'
-                bat 'dir /s /b src\\*.test.js'
-                bat 'dir /s /b src\\*.spec.js'
-                 }
-              }
-            }
-          }
+        
         stage('Test') {
             steps {
                 echo '🧪 Running tests...'
                 script {
+                    // We know App.test.js exists, so just run the tests
                     if (isUnix()) {
                         sh 'npm test -- --watchAll=false'
                     } else {
@@ -98,14 +85,23 @@ pipeline {
                 script {
                     if (isUnix()) {
                         sh '''
-                            mkdir -p /var/www/html/jenkins-react-demo
-                            cp -r build/* /var/www/html/jenkins-react-demo/
+                            mkdir -p /var/www/html/jenkins-react-project
+                            cp -r build/* /var/www/html/jenkins-react-project/
                         '''
                     } else {
                         bat '''
                             @echo off
+                            echo Creating deployment directory...
                             if not exist "C:\\nginx\\html\\jenkins-react-project" mkdir "C:\\nginx\\html\\jenkins-react-project"
+                            
+                            echo Copying build files...
                             xcopy /E /Y /I build\\* C:\\nginx\\html\\jenkins-react-project\\
+                            
+                            echo.
+                            echo ========================================
+                            echo ✅ Deployment complete!
+                            echo 📍 Your app is available at: http://localhost:8081
+                            echo ========================================
                         '''
                     }
                 }
@@ -115,14 +111,13 @@ pipeline {
     
     post {
         success {
-            echo '✅ Pipeline succeeded!'
+            echo '✅ Pipeline succeeded! Application is deployed successfully.'
         }
         failure {
-            echo '❌ Pipeline failed!'
+            echo '❌ Pipeline failed! Check the logs above for errors.'
         }
         always {
             echo '🎯 Pipeline execution completed.'
-            cleanWs()
         }
     }
 }
