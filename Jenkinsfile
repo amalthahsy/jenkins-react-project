@@ -1,66 +1,75 @@
 pipeline {
     agent any
-    
+
     tools {
         nodejs 'NodeJS-24'
     }
-    
+
     environment {
         CI = 'true'
+        APP_NAME = 'jenkins-react-project'
+        WINDOWS_NGINX_PATH = 'C:\\nginx\\html\\jenkins-react-project'
+        LINUX_NGINX_PATH = '/var/www/html/jenkins-react-project'
     }
-    
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
     stages {
+
+        stage('Clean Workspace') {
+            steps {
+                echo '🧹 Cleaning workspace...'
+                deleteDir()
+            }
+        }
+
         stage('Checkout') {
             steps {
-                echo '📦 Checking out code from GitHub...'
+                echo '📦 Fetching source code...'
                 checkout scm
             }
         }
-        
-        stage('Setup') {
-            steps {
-                script {
-                    echo '🔧 Setting up Node.js environment...'
-                    if (isUnix()) {
-                        sh 'node --version'
-                        sh 'npm --version'
-                    } else {
-                        bat 'node --version'
-                        bat 'npm --version'
-                    }
-                }
-            }
-        }
-        
+
         stage('Install Dependencies') {
             steps {
                 echo '📥 Installing npm dependencies...'
+                sh '''
+                    if [ -f package-lock.json ]; then
+                        npm ci
+                    else
+                        npm install
+                    fi
+                ''' 
+                || bat '''
+                    if exist package-lock.json (
+                        npm ci
+                    ) else (
+                        npm install
+                    )
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo '🧪 Running tests...'
                 script {
                     if (isUnix()) {
-                        sh 'npm install'
+                        sh 'npm test -- --watchAll=false || echo "Tests failed or skipped"'
                     } else {
-                        bat 'npm install'
+                        bat 'npm test -- --watchAll=false || echo Tests failed or skipped'
                     }
                 }
             }
         }
-        
-        stage('Test') {
-    steps {
-        echo '⚠️ Tests temporarily bypassed for Windows setup'
-        script {
-            if (isUnix()) {
-                sh 'npm test || echo "Tests bypassed"'
-            } else {
-                bat 'echo Tests bypassed for now'
-                   }
-                }
-            }
-        }
-        
+
         stage('Build') {
             steps {
-                echo '🏗️ Building React application...'
+                echo '🏗️ Building React app...'
                 script {
                     if (isUnix()) {
                         sh 'npm run build'
@@ -70,101 +79,97 @@ pipeline {
                 }
             }
         }
-        
-        stage('Archive Build') {
+
+        stage('Validate Build') {
             steps {
-                echo '📚 Archiving build artifacts...'
+                echo '🔍 Validating build output...'
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            test -f build/index.html || (echo "❌ Build failed: index.html missing" && exit 1)
+                        '''
+                    } else {
+                        bat '''
+                            if not exist build\\index.html (
+                                echo ❌ Build failed: index.html missing
+                                exit /b 1
+                            )
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                echo '📚 Archiving build...'
                 archiveArtifacts artifacts: 'build/**', fingerprint: true
             }
         }
-        
-       stage('Deploy') {
-       steps {
-        echo '🚀 Deploying application...'
-        script {
-            if (isUnix()) {
-                sh '''
-                    mkdir -p /var/www/html/jenkins-react-project
-                    cp -r build/* /var/www/html/jenkins-react-project/
-                '''
-            } else {
-                bat '''
-                    @echo off
-                    echo ========================================
-                    echo Starting Deployment Process
-                    echo ========================================
-                    
-                    REM Set variables
-                    set TARGET_DIR=C:\\nginx\\html\\jenkins-react-project
-                    set SOURCE_DIR=build
-                    
-                    REM Check if source exists
-                    if not exist "%SOURCE_DIR%" (
-                        echo ❌ ERROR: Build folder not found!
-                        exit /b 1
-                    )
-                    echo ✅ Build folder found
-                    
-                    REM Create target directory
-                    if not exist "%TARGET_DIR%" (
-                        echo Creating target directory...
-                        mkdir "%TARGET_DIR%"
-                        if errorlevel 1 (
-                            echo ❌ ERROR: Failed to create target directory!
-                            echo Try running Jenkins as Administrator
-                            exit /b 1
-                        )
-                    )
-                    echo ✅ Target directory ready: %TARGET_DIR%
-                    
-                    REM Clear old deployment (optional)
-                    echo Cleaning old deployment...
-                    del /Q /F "%TARGET_DIR%\\*" 2>nul
-                    for /d %%p in ("%TARGET_DIR%\\*") do rmdir /Q /S "%%p" 2>nul
-                    
-                    REM Copy new files with verification
-                    echo Copying build files...
-                    xcopy /E /Y /I "%SOURCE_DIR%\\*" "%TARGET_DIR%\\"
-                    
-                    if errorlevel 1 (
-                        echo ❌ ERROR: Copy failed!
-                        exit /b 1
-                    )
-                    
-                    REM Verify deployment
-                    echo Verifying deployment...
-                    if exist "%TARGET_DIR%\\index.html" (
-                        echo ✅ Deployment verified! index.html found.
-                    ) else (
-                        echo ❌ WARNING: index.html not found in target!
-                    )
-                    
-                    REM Show deployed files
-                    echo.
-                    echo Deployed files:
-                    dir "%TARGET_DIR%" /b
-                    
-                    echo.
-                    echo ========================================
-                    echo ✅ Deployment Complete!
-                    echo 📍 Your app: http://localhost:8081
-                    echo ========================================
-                '''
-                 }
-              }
-          }
-      }
+
+        stage('Deploy to Nginx') {
+            steps {
+                echo '🚀 Deploying to Nginx...'
+                script {
+                    if (isUnix()) {
+                        sh """
+                            sudo rm -rf ${LINUX_NGINX_PATH}/*
+                            sudo cp -r build/* ${LINUX_NGINX_PATH}/
+                            ls -la ${LINUX_NGINX_PATH}
+                        """
+                    } else {
+                        bat """
+                            echo =====================================
+                            echo Deploying React App to Nginx
+                            echo =====================================
+
+                            set SOURCE=%WORKSPACE%\\build
+                            set TARGET=${WINDOWS_NGINX_PATH}
+
+                            echo Source: %SOURCE%
+                            echo Target: %TARGET%
+
+                            if not exist "%SOURCE%\\index.html" (
+                                echo ❌ Build folder invalid!
+                                exit /b 1
+                            )
+
+                            if not exist "%TARGET%" mkdir "%TARGET%"
+
+                            echo Cleaning old files...
+                            del /Q /F "%TARGET%\\*" 2>nul
+                            for /d %%p in ("%TARGET%\\*") do rmdir /Q /S "%%p" 2>nul
+
+                            echo Copying files...
+                            xcopy /E /Y /I "%SOURCE%\\*" "%TARGET%\\"
+
+                            echo Verifying deployment...
+                            if exist "%TARGET%\\index.html" (
+                                echo ✅ Deployment successful
+                            ) else (
+                                echo ❌ Deployment failed
+                                exit /b 1
+                            )
+
+                            dir "%TARGET%"
+                        """
+                    }
+                }
+            }
+        }
     }
-    
+
     post {
         success {
-            echo '✅ Pipeline succeeded! Application is deployed successfully.'
+            echo '🎉 SUCCESS: React app deployed successfully!'
         }
+
         failure {
-            echo '❌ Pipeline failed! Check the logs above for errors.'
+            echo '❌ FAILED: Check logs for errors'
         }
+
         always {
-            echo '🎯 Pipeline execution completed.'
+            echo '📌 Pipeline finished'
         }
     }
- }
+}
