@@ -45,7 +45,7 @@ function App() {
           )}
         </div>
 
-        <p className="version">Version: 1.0.0 - Built by Jenkins</p>
+        <p className="version">Version: 1.0.1 - Deployed via Jenkins Webhook 🚀</p>
       </header>
     </div>
   );
